@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tischtennis Liga</title>
+<style>
+:root{--bg:#fafaf8;--card:#fff;--ink:#1c1c1a;--mute:#6b6b66;--line:#e4e4de;--acc:#1f7a4d;--acc-ink:#fff;--bad:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#151514;--card:#1f1f1d;--ink:#f0f0ec;--mute:#9a9a93;--line:#34342f;--acc:#4cc38a;--acc-ink:#0b1f15;--bad:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px;padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom))}
+h1{font-size:22px;margin:4px 0 2px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 10px}
+.sub{color:var(--mute);font-size:14px;margin:0 0 6px}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+input,select,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+input[type=number]{width:64px;text-align:center}
+.grow{flex:1}
+button{cursor:pointer}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+button.x{border:0;background:none;color:var(--mute);padding:4px 8px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:8px 6px;text-align:center;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--mute);font-weight:600}
+td.n,th.n{text-align:left}
+tr:nth-child(2) td{font-weight:600}
+td.p{font-weight:700;color:var(--acc)}
+.m{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.m:last-child{border:0}
+.m small{color:var(--mute)}
+.w{font-weight:700}
+.msg{color:var(--bad);font-size:14px;min-height:20px;margin:6px 0 0}
+.empty{color:var(--mute);font-size:14px}
+.tag{font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+<main>
+<h1>🏓 Tischtennis Liga</h1>
+<p class="sub">Spieler eintragen, Saison anlegen, Spiele erfassen. Sieg = 2 Punkte.</p>
+<p class="tag" id="mode">Lade Daten …</p>
+
+<section>
+<h2>Saison</h2>
+<div class="row">
+<select id="season" class="grow"></select>
+<button id="newSeason">Neue Saison</button>
+</div>
+<div class="row" id="seasonForm" style="display:none;margin-top:8px">
+<input id="sn" class="grow" placeholder="z. B. Winter 2026" maxlength="40">
+<select id="sm" style="flex:1 1 100%"><option value="double">Hin- und Rückrunde (jeder 2× gegen jeden)</option><option value="single">Nur Hinrunde (jeder 1× gegen jeden)</option><option value="free">Freies Spielen (beliebig oft)</option></select>
+<select id="sw" class="grow"><option value="0">Beliebig (kein festes Satzformat)</option><option value="2">Best of 3 (2 Gewinnsätze)</option><option value="3" selected>Best of 5 (3 Gewinnsätze)</option><option value="4">Best of 7 (4 Gewinnsätze)</option></select>
+<button id="saveSeason" class="pri">Anlegen</button>
+</div>
+<p class="tag" id="sinfo" style="margin:10px 0 0"></p>
+</section>
+
+<section>
+<h2>Tabelle</h2>
+<div class="tw" id="table"></div>
+</section>
+
+<section>
+<h2>Spiel eintragen</h2>
+<div class="row">
+<select id="a" class="grow"></select>
+<input id="sa" type="number" min="0" max="30" inputmode="numeric" placeholder="0">
+</div>
+<div class="row" style="margin-top:8px">
+<select id="b" class="grow"></select>
+<input id="sb" type="number" min="0" max="30" inputmode="numeric" placeholder="0">
+</div>
+<p class="msg" id="msg"></p>
+<button class="pri" id="add" style="width:100%">Spiel speichern</button>
+</section>
+
+<section>
+<h2>Spieler</h2>
+<div class="row">
+<input id="pn" class="grow" placeholder="Name" maxlength="30">
+<button id="addP">Hinzufügen</button>
+</div>
+<div id="players" style="margin-top:10px"></div>
+</section>
+
+<section>
+<h2>Spielverlauf</h2>
+<div id="matches"></div>
+</section>
+</main>
+
+<script>
+const SB_URL="https://wqrgwcrrqqiqtckjuhhu.supabase.co";
+const SB_KEY="sb_publishable_Qqfno0M28MUcun6KCqmEmQ_l_ixO12J";
+const HDR={apikey:SB_KEY,"Content-Type":"application/json"};
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+let S={players:[],seasons:[],matches:[]};
+let cur=null;
+try{cur=localStorage.getItem("ttliga:cur")}catch(e){}
+function setCur(id){cur=id;try{localStorage.setItem("ttliga:cur",id)}catch(e){}}
+
+function setStatus(ok,txt){
+  $("mode").textContent=ok?"Verbunden: alle sehen dieselben Daten.":(txt||"Keine Verbindung zur Datenbank. Bitte später erneut versuchen.");
+}
+
+async function pull(){
+  const r=await fetch(SB_URL+"/rest/v1/state?id=eq.liga&select=json",{headers:HDR});
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const rows=await r.json();
+  if(!rows.length)throw new Error("Eintrag liga fehlt");
+  const d=JSON.parse(rows[0].json);
+  S={players:d.players||[],seasons:d.seasons||[],matches:d.matches||[]};
+}
+async function push(){
+  const r=await fetch(SB_URL+"/rest/v1/state?id=eq.liga",{
+    method:"PATCH",
+    headers:{...HDR,Prefer:"return=minimal"},
+    body:JSON.stringify({json:JSON.stringify(S),updated_at:new Date().toISOString()})
+  });
+  if(!r.ok)throw new Error("HTTP "+r.status);
+}
+// Holt immer zuerst den neuesten Stand, wendet die Änderung an und speichert.
+async function mutate(fn){
+  try{
+    await pull();
+    fn();
+    render();
+    await push();
+    setStatus(true);
+  }catch(e){
+    setStatus(false,"Speichern fehlgeschlagen ("+e.message+").");
+  }
+}
+
+function stats(){
+  const t={};
+  S.players.forEach(p=>t[p]={n:p,sp:0,s:0,l:0,sw:0,sl:0,pt:0});
+  S.matches.filter(m=>m.season===cur).forEach(m=>{
+    const A=t[m.a],B=t[m.b];if(!A||!B)return;
+    A.sp++;B.sp++;A.sw+=m.sa;A.sl+=m.sb;B.sw+=m.sb;B.sl+=m.sa;
+    if(m.sa>m.sb){A.s++;B.l++;A.pt+=2}else{B.s++;A.l++;B.pt+=2}
+  });
+  return Object.values(t).sort((x,y)=>y.pt-x.pt||(y.sw-y.sl)-(x.sw-x.sl)||y.sw-x.sw||x.n.localeCompare(y.n,"de"));
+}
+
+function render(){
+  if(!S.seasons.find(s=>s.id===cur)&&S.seasons.length)setCur(S.seasons[S.seasons.length-1].id);
+  const ss=$("season");
+  ss.innerHTML=S.seasons.length?S.seasons.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join(""):`<option value="">Noch keine Saison</option>`;
+  if(cur)ss.value=cur;
+
+  const opts=S.players.map(p=>`<option>${esc(p)}</option>`).join("");
+  const a=$("a").value,b=$("b").value;
+  $("a").innerHTML=opts;$("b").innerHTML=opts;
+  if(S.players.includes(a))$("a").value=a;
+  if(S.players.includes(b))$("b").value=b;
+  else if(S.players.length>1)$("b").selectedIndex=1;
+
+  const st=stats();
+  const cs=S.seasons.find(s=>s.id===cur);
+  if(cs){
+    const n=S.players.length,played=S.matches.filter(m=>m.season===cur).length;
+    const mt=cs.mode==="single"?"Nur Hinrunde (jeder 1× gegen jeden)":cs.mode==="double"?"Hin- und Rückrunde (jeder 2× gegen jeden)":"Freies Spielen";
+    const sw=cs.win?" · Best of "+(cs.win*2-1)+" ("+cs.win+" Gewinnsätze)":"";
+    const tot=cs.mode==="single"?n*(n-1)/2:cs.mode==="double"?n*(n-1):0;
+    $("sinfo").textContent=mt+sw+(tot?" · "+played+" von "+tot+" Spielen":" · "+played+" Spiele");
+  }else $("sinfo").textContent="";
+
+  $("table").innerHTML=st.length?`<table><tr><th>#</th><th class="n">Name</th><th>Sp</th><th>S</th><th>N</th><th>Sätze</th><th>Pkt</th></tr>`+
+    st.map((r,i)=>`<tr><td>${i+1}</td><td class="n">${esc(r.n)}</td><td>${r.sp}</td><td>${r.s}</td><td>${r.l}</td><td>${r.sw}:${r.sl}</td><td class="p">${r.pt}</td></tr>`).join("")+`</table>`
+    :`<p class="empty">Füge zuerst Spieler hinzu.</p>`;
+
+  $("players").innerHTML=S.players.length?S.players.map(p=>`<span class="tag" style="margin-right:12px">${esc(p)}</span>`).join(""):`<p class="empty">Noch keine Spieler.</p>`;
+
+  const ms=S.matches.filter(m=>m.season===cur).slice().reverse();
+  $("matches").innerHTML=ms.length?ms.map(m=>`<div class="m"><div><span class="${m.sa>m.sb?"w":""}">${esc(m.a)}</span> – <span class="${m.sb>m.sa?"w":""}">${esc(m.b)}</span><br><small>${m.sa}:${m.sb} · ${esc(m.d)}</small></div><button class="x" data-del="${esc(m.id)}" aria-label="Löschen">✕</button></div>`).join(""):`<p class="empty">Noch keine Spiele in dieser Saison.</p>`;
+}
+
+$("season").onchange=e=>{if(e.target.value){setCur(e.target.value);render()}};
+$("newSeason").onclick=()=>{
+  const f=$("seasonForm");
+  f.style.display=f.style.display==="none"?"flex":"none";
+  if(f.style.display==="flex")$("sn").focus();
+};
+$("saveSeason").onclick=()=>{
+  const n=$("sn").value.trim();
+  if(!n)return;
+  const s={id:uid(),name:n.slice(0,40),mode:$("sm").value,win:parseInt($("sw").value,10)};
+  setCur(s.id);
+  $("sn").value="";$("seasonForm").style.display="none";
+  mutate(()=>{S.seasons.push(s)});
+};
+$("sn").onkeydown=e=>{if(e.key==="Enter")$("saveSeason").click()};
+
+$("addP").onclick=()=>{
+  const n=$("pn").value.trim();
+  if(!n)return;
+  $("pn").value="";
+  mutate(()=>{if(!S.players.some(p=>p.toLowerCase()===n.toLowerCase()))S.players.push(n)});
+};
+$("pn").onkeydown=e=>{if(e.key==="Enter")$("addP").click()};
+
+$("add").onclick=()=>{
+  const m=$("msg");m.textContent="";
+  const cs=S.seasons.find(s=>s.id===cur);
+  if(!cs){m.textContent="Bitte zuerst eine Saison anlegen.";return}
+  const a=$("a").value,b=$("b").value,sa=parseInt($("sa").value,10),sb=parseInt($("sb").value,10);
+  if(!a||!b||a===b){m.textContent="Bitte zwei verschiedene Spieler wählen.";return}
+  if(isNaN(sa)||isNaN(sb)||sa<0||sb<0){m.textContent="Bitte beide Satzergebnisse eintragen.";return}
+  if(sa===sb){m.textContent="Unentschieden gibt es nicht, ein Spieler muss gewinnen.";return}
+  if(cs.win&&(Math.max(sa,sb)!==cs.win||Math.min(sa,sb)>=cs.win)){m.textContent="Bei Best of "+(cs.win*2-1)+" hat der Sieger genau "+cs.win+" Sätze, der Verlierer weniger.";return}
+  if(cs.mode==="single"||cs.mode==="double"){
+    const lim=cs.mode==="single"?1:2;
+    const c=S.matches.filter(x=>x.season===cur&&((x.a===a&&x.b===b)||(x.a===b&&x.b===a))).length;
+    if(c>=lim){m.textContent=a+" und "+b+" haben schon "+c+"× gegeneinander gespielt (erlaubt: "+lim+"×).";return}
+  }
+  const match={id:uid(),season:cur,a,b,sa,sb,d:new Date().toLocaleDateString("de-DE")};
+  $("sa").value="";$("sb").value="";
+  mutate(()=>{S.matches.push(match)});
+};
+
+let pend=null;
+$("matches").onclick=e=>{
+  const id=e.target.dataset&&e.target.dataset.del;
+  if(!id)return;
+  if(pend===id){pend=null;mutate(()=>{S.matches=S.matches.filter(m=>m.id!==id)})}
+  else{pend=id;e.target.textContent="Löschen?";e.target.style.color="var(--bad)"}
+};
+
+async function refresh(){
+  try{await pull();render();setStatus(true)}catch(e){setStatus(false,"Keine Verbindung zur Datenbank ("+e.message+").")}
+}
+render();
+refresh();
+setInterval(()=>{if(!document.hidden&&document.activeElement.tagName!=="INPUT")refresh()},15000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
+</script>
+</body>
+</html>
