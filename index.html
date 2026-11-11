@@ -38,6 +38,9 @@ td.p{font-weight:700;color:var(--acc)}
 .msg{color:var(--bad);font-size:14px;min-height:20px;margin:6px 0 0}
 .empty{color:var(--mute);font-size:14px}
 .tag{font-size:12px;color:var(--mute)}
+.rd{font-size:13px;color:var(--mute);font-weight:600;margin:10px 0 2px}
+.rd:first-child{margin-top:0}
+#plan button{padding:6px 12px}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 </style>
 </head>
@@ -79,6 +82,11 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 <section>
 <h2>Tabelle</h2>
 <div class="tw" id="table"></div>
+</section>
+
+<section id="planSec" style="display:none">
+<h2>Spielplan</h2>
+<div id="plan"></div>
 </section>
 
 <section>
@@ -196,6 +204,25 @@ function stats(){
 }
 
 let pendP=null;
+// Rundenplan nach dem Kreismethoden-Verfahren: jeder spielt pro Runde höchstens einmal.
+function schedule(players,legs){
+  const p=players.slice();
+  if(p.length<2)return [];
+  if(p.length%2)p.push(null);
+  const n=p.length,rounds=[];
+  for(let r=0;r<n-1;r++){
+    const rd=[];
+    for(let i=0;i<n/2;i++){
+      const a=p[i],b=p[n-1-i];
+      if(a&&b)rd.push([a,b]);
+    }
+    rounds.push(rd);
+    p.splice(1,0,p.pop());
+  }
+  const out=[];
+  for(let l=0;l<legs;l++)rounds.forEach((rd,i)=>out.push({round:l*rounds.length+i+1,leg:l,pairs:rd}));
+  return out;
+}
 function render(){
   pendP=null;
   if(!S.seasons.find(s=>s.id===cur)&&S.seasons.length)setCur(S.seasons[S.seasons.length-1].id);
@@ -219,6 +246,24 @@ function render(){
     const tot=cs.mode==="single"?n*(n-1)/2:cs.mode==="double"?n*(n-1):0;
     $("sinfo").textContent=mt+sw+(tot?" · "+played+" von "+tot+" Spielen":" · "+played+" Spiele");
   }else $("sinfo").textContent="";
+
+  {
+    const sec=$("planSec"),box=$("plan");
+    if(cs&&(cs.mode==="single"||cs.mode==="double")&&S.players.length>1){
+      sec.style.display="block";
+      const legs=cs.mode==="single"?1:2;
+      const cnt=(a,b)=>S.matches.filter(x=>x.season===cur&&((x.a===a&&x.b===b)||(x.a===b&&x.b===a))).length;
+      let html="",shown=0;
+      for(const rd of schedule(S.players,legs)){
+        const open=rd.pairs.filter(([a,b])=>cnt(a,b)<=rd.leg);
+        if(!open.length)continue;
+        if(shown>=2)break;
+        shown++;
+        html+=`<div class="rd">Runde ${rd.round}</div>`+open.map(([a,b])=>`<div class="m"><span>${esc(a)} – ${esc(b)}</span><button data-pa="${esc(a)}" data-pb="${esc(b)}">Eintragen</button></div>`).join("");
+      }
+      box.innerHTML=html||`<p class="empty">Alle Spiele dieser Saison sind gespielt. 🎉</p>`;
+    }else sec.style.display="none";
+  }
 
   $("table").innerHTML=st.length?`<table><tr><th>#</th><th class="n">Name</th><th>Sp</th><th>S</th><th>N</th><th>Sätze</th><th>Pkt</th></tr>`+
     st.map((r,i)=>`<tr><td>${i+1}</td><td class="n">${esc(r.n)}</td><td>${r.sp}</td><td>${r.s}</td><td>${r.l}</td><td>${r.sw}:${r.sl}</td><td class="p">${r.pt}</td></tr>`).join("")+`</table>`
@@ -271,6 +316,14 @@ $("add").onclick=()=>{
   const match={id:uid(),season:cur,a,b,sa,sb,d:new Date().toLocaleDateString("de-DE")};
   $("sa").value="";$("sb").value="";
   mutate(()=>{S.matches.push(match)});
+};
+
+$("plan").onclick=e=>{
+  const a=e.target.dataset&&e.target.dataset.pa;
+  if(!a)return;
+  $("a").value=a;$("b").value=e.target.dataset.pb;
+  $("a").scrollIntoView({behavior:"smooth",block:"center"});
+  $("sa").focus();
 };
 
 $("players").onclick=e=>{
