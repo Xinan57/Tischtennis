@@ -187,7 +187,9 @@ function stats(){
   return Object.values(t).sort((x,y)=>y.pt-x.pt||(y.sw-y.sl)-(x.sw-x.sl)||y.sw-x.sw||x.n.localeCompare(y.n,"de"));
 }
 
+let pendP=null;
 function render(){
+  pendP=null;
   if(!S.seasons.find(s=>s.id===cur)&&S.seasons.length)setCur(S.seasons[S.seasons.length-1].id);
   const ss=$("season");
   ss.innerHTML=S.seasons.length?S.seasons.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join(""):`<option value="">Noch keine Saison</option>`;
@@ -214,7 +216,7 @@ function render(){
     st.map((r,i)=>`<tr><td>${i+1}</td><td class="n">${esc(r.n)}</td><td>${r.sp}</td><td>${r.s}</td><td>${r.l}</td><td>${r.sw}:${r.sl}</td><td class="p">${r.pt}</td></tr>`).join("")+`</table>`
     :`<p class="empty">Füge zuerst Spieler hinzu.</p>`;
 
-  $("players").innerHTML=S.players.length?S.players.map(p=>`<span class="tag" style="margin-right:12px">${esc(p)}</span>`).join(""):`<p class="empty">Noch keine Spieler.</p>`;
+  $("players").innerHTML=S.players.length?S.players.map(p=>`<div class="m"><span>${esc(p)}</span><button class="x" data-delp="${esc(p)}" aria-label="Spieler löschen">✕</button></div>`).join(""):`<p class="empty">Noch keine Spieler.</p>`;
 
   const ms=S.matches.filter(m=>m.season===cur).slice().reverse();
   $("matches").innerHTML=ms.length?ms.map(m=>`<div class="m"><div><span class="${m.sa>m.sb?"w":""}">${esc(m.a)}</span> – <span class="${m.sb>m.sa?"w":""}">${esc(m.b)}</span><br><small>${m.sa}:${m.sb} · ${esc(m.d)}</small></div><button class="x" data-del="${esc(m.id)}" aria-label="Löschen">✕</button></div>`).join(""):`<p class="empty">Noch keine Spiele in dieser Saison.</p>`;
@@ -261,6 +263,20 @@ $("add").onclick=()=>{
   const match={id:uid(),season:cur,a,b,sa,sb,d:new Date().toLocaleDateString("de-DE")};
   $("sa").value="";$("sb").value="";
   mutate(()=>{S.matches.push(match)});
+};
+
+$("players").onclick=e=>{
+  const n=e.target.dataset&&e.target.dataset.delp;
+  if(!n)return;
+  if(pendP===n){
+    pendP=null;
+    mutate(()=>{S.players=S.players.filter(p=>p!==n);S.matches=S.matches.filter(m=>m.a!==n&&m.b!==n)});
+  }else{
+    pendP=n;
+    const c=S.matches.filter(m=>m.a===n||m.b===n).length;
+    e.target.textContent=c?"Mit "+c+" Spielen löschen?":"Löschen?";
+    e.target.style.color="var(--bad)";
+  }
 };
 
 let pend=null;
