@@ -41,7 +41,18 @@ td.p{font-weight:700;color:var(--acc)}
 <main>
 <h1>🏓 Tischtennis Liga</h1>
 <p class="sub">Spieler eintragen, Saison anlegen, Spiele erfassen. Sieg = 2 Punkte.</p>
-<p class="tag" id="mode">Lade Daten …</p>
+<p class="tag" id="mode"></p>
+
+<section id="login" style="display:none">
+<h2>Anmelden</h2>
+<div class="row">
+<input id="pw" type="password" class="grow" placeholder="Passwort" autocomplete="current-password">
+<button id="loginBtn" class="pri">Öffnen</button>
+</div>
+<p class="msg" id="loginMsg"></p>
+</section>
+
+<div id="app" style="display:none">
 
 <section>
 <h2>Saison</h2>
@@ -90,12 +101,36 @@ td.p{font-weight:700;color:var(--acc)}
 <h2>Spielverlauf</h2>
 <div id="matches"></div>
 </section>
+
+<p style="text-align:center"><button class="x" id="logout">Abmelden</button></p>
+</div>
 </main>
 
 <script>
 const SB_URL="https://wqrgwcrrqqiqtckjuhhu.supabase.co";
 const SB_KEY="sb_publishable_Qqfno0M28MUcun6KCqmEmQ_l_ixO12J";
-const HDR={apikey:SB_KEY,"Content-Type":"application/json"};
+const EMAIL="liga@tischtennis.app";
+let sess=null;
+try{sess=JSON.parse(localStorage.getItem("ttliga:sess"))}catch(e){}
+function saveSess(j){
+  sess={access:j.access_token,refresh:j.refresh_token,exp:Date.now()+(j.expires_in-60)*1000};
+  try{localStorage.setItem("ttliga:sess",JSON.stringify(sess))}catch(e){}
+}
+async function authReq(body,grant){
+  const r=await fetch(SB_URL+"/auth/v1/token?grant_type="+grant,{method:"POST",headers:{apikey:SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error("auth "+r.status);
+  saveSess(await r.json());
+}
+async function hdr(){
+  if(!sess)throw new Error("login");
+  if(Date.now()>sess.exp){
+    try{await authReq({refresh_token:sess.refresh},"refresh_token")}catch(e){logout();throw new Error("login")}
+  }
+  return {apikey:SB_KEY,Authorization:"Bearer "+sess.access,"Content-Type":"application/json"};
+}
+function showLogin(){$("login").style.display="block";$("app").style.display="none";$("mode").textContent=""}
+function showApp(){$("login").style.display="none";$("app").style.display="block"}
+function logout(){sess=null;try{localStorage.removeItem("ttliga:sess")}catch(e){}showLogin()}
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -111,7 +146,8 @@ function setStatus(ok,txt){
 }
 
 async function pull(){
-  const r=await fetch(SB_URL+"/rest/v1/state?id=eq.liga&select=json",{headers:HDR});
+  const r=await fetch(SB_URL+"/rest/v1/state?id=eq.liga&select=json",{headers:await hdr()});
+  if(r.status===401||r.status===403)throw new Error("login");
   if(!r.ok)throw new Error("HTTP "+r.status);
   const rows=await r.json();
   if(!rows.length)throw new Error("Eintrag liga fehlt");
@@ -121,7 +157,7 @@ async function pull(){
 async function push(){
   const r=await fetch(SB_URL+"/rest/v1/state?id=eq.liga",{
     method:"PATCH",
-    headers:{...HDR,Prefer:"return=minimal"},
+    headers:{...(await hdr()),Prefer:"return=minimal"},
     body:JSON.stringify({json:JSON.stringify(S),updated_at:new Date().toISOString()})
   });
   if(!r.ok)throw new Error("HTTP "+r.status);
@@ -135,6 +171,7 @@ async function mutate(fn){
     await push();
     setStatus(true);
   }catch(e){
+    if(e.message==="login"){logout();return}
     setStatus(false,"Speichern fehlgeschlagen ("+e.message+").");
   }
 }
@@ -235,12 +272,26 @@ $("matches").onclick=e=>{
 };
 
 async function refresh(){
-  try{await pull();render();setStatus(true)}catch(e){setStatus(false,"Keine Verbindung zur Datenbank ("+e.message+").")}
+  try{await pull();render();setStatus(true)}catch(e){
+    if(e.message==="login"){logout();return}
+    setStatus(false,"Keine Verbindung zur Datenbank ("+e.message+").")
+  }
 }
-render();
-refresh();
-setInterval(()=>{if(!document.hidden&&document.activeElement.tagName!=="INPUT")refresh()},15000);
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
+$("loginBtn").onclick=async()=>{
+  const pw=$("pw").value;
+  const m=$("loginMsg");m.textContent="";
+  if(!pw)return;
+  try{
+    await authReq({email:EMAIL,password:pw},"password");
+    $("pw").value="";
+    showApp();render();refresh();
+  }catch(e){m.textContent="Falsches Passwort."}
+};
+$("pw").onkeydown=e=>{if(e.key==="Enter")$("loginBtn").click()};
+$("logout").onclick=logout;
+if(sess){showApp();render();refresh()}else showLogin();
+setInterval(()=>{if(sess&&!document.hidden&&document.activeElement.tagName!=="INPUT")refresh()},15000);
+document.addEventListener("visibilitychange",()=>{if(sess&&!document.hidden)refresh()});
 </script>
 </body>
 </html>
