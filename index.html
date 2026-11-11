@@ -101,6 +101,12 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 <div class="tw" id="table"></div>
 </section>
 
+<section id="allSec">
+<h2>Gesamtranking (alle Saisons)</h2>
+<p class="tag" id="allInfo" style="margin:0 0 8px"></p>
+<div class="tw" id="allTable"></div>
+</section>
+
 <section id="planSec" style="display:none">
 <h2>Spielplan</h2>
 <div id="plan"></div>
@@ -209,10 +215,10 @@ async function mutate(fn){
   }
 }
 
-function stats(){
+function stats(all){
   const t={};
   S.players.forEach(p=>t[p]={n:p,sp:0,s:0,l:0,sw:0,sl:0,pt:0});
-  S.matches.filter(m=>m.season===cur).forEach(m=>{
+  S.matches.filter(m=>all||m.season===cur).forEach(m=>{
     const A=t[m.a],B=t[m.b];if(!A||!B)return;
     A.sp++;B.sp++;A.sw+=m.sa;A.sl+=m.sb;B.sw+=m.sb;B.sl+=m.sa;
     if(m.sa>m.sb){A.s++;B.l++;A.pt+=2}else{B.s++;A.l++;B.pt+=2}
@@ -296,7 +302,14 @@ function render(){
     st.map((r,i)=>`<tr><td>${i+1}</td><td class="n">${esc(r.n)}</td><td>${r.sp}</td><td>${r.s}</td><td>${r.l}</td><td>${r.sw}:${r.sl}</td><td class="p">${r.pt}</td></tr>`).join("")+`</table>`
     :`<p class="empty">Füge zuerst Spieler hinzu.</p>`;
 
-  $("players").innerHTML=S.players.length?S.players.map(p=>`<div class="m"><span>${esc(p)}</span><button class="x" data-delp="${esc(p)}" aria-label="Spieler löschen">✕</button></div>`).join(""):`<p class="empty">Noch keine Spieler.</p>`;
+  const al=stats(true).filter(r=>r.sp>0),tot=S.matches.length;
+  const top=al.length?al[0]:null;
+  const nSeas=new Set(S.matches.map(m=>m.season)).size;
+  $("allInfo").textContent=tot?tot+(tot===1?" Spiel":" Spiele")+" in "+nSeas+(nSeas===1?" Saison":" Saisons")+(top?" · 👑 Bester Spieler: "+top.n+" ("+top.pt+" Punkte)":""):"";
+  $("allTable").innerHTML=tot?`<table><tr><th>#</th><th class="n">Name</th><th>Sp</th><th>S</th><th>N</th><th>Pkt</th></tr>`+al.map((r,i)=>`<tr><td>${i+1}</td><td class="n">${esc(r.n)}${i===0?" 👑":""}</td><td>${r.sp}</td><td>${r.s}</td><td>${r.l}</td><td class="p">${r.pt}</td></tr>`).join("")+`</table>`:`<p class="empty">Noch keine Spiele eingetragen.</p>`;
+
+  const sa=Object.fromEntries(stats(true).map(r=>[r.n,r]));
+  $("players").innerHTML=S.players.length?S.players.map(p=>{const r=sa[p]||{sp:0,s:0,l:0};return `<div class="m"><div>${esc(p)}<br><small>${r.sp} ${r.sp===1?"Spiel":"Spiele"} · ${r.s} ${r.s===1?"Sieg":"Siege"} · ${r.l} ${r.l===1?"Niederlage":"Niederlagen"}</small></div><button class="x" data-delp="${esc(p)}" aria-label="Spieler löschen">✕</button></div>`}).join(""):`<p class="empty">Noch keine Spieler.</p>`;
 
   const ms=S.matches.filter(m=>m.season===cur).slice().reverse();
   $("matches").innerHTML=ms.length?ms.map(m=>`<div class="m"><div><span class="${m.sa>m.sb?"w":""}">${esc(m.a)}</span> – <span class="${m.sb>m.sa?"w":""}">${esc(m.b)}</span><br><small>${m.sa}:${m.sb} · ${esc(m.d)}</small></div><button class="x" data-del="${esc(m.id)}" aria-label="Löschen">✕</button></div>`).join(""):`<p class="empty">Noch keine Spiele in dieser Saison.</p>`;

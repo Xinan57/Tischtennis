@@ -11,11 +11,12 @@
 
 ## Features
 
-- **Players:** add and remove players
+- **Players:** add and remove players, with total matches, wins and losses shown under each name
 - **Seasons:** create and delete seasons, each with its own play mode and set format
 - **Matches:** record results with set scores and delete single matches
 - **Schedule:** single-round seasons list all open pairings with result fields, and saving a result removes the pairing from the list. Other seasons with a fixed set format (best of 3, 5 or 7) show the next open pairings and fill them into the entry form
 - **Standings:** matches played, wins, losses, sets and points, calculated automatically
+- **Overall ranking:** a team counter across all seasons with the total number of matches, points per player and the best player overall
 - **Shared data:** everyone sees the same state, and the page refreshes every 15 seconds
 - **Password protection:** without logging in, no data can be read or changed
 - Mobile friendly, with light and dark mode
