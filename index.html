@@ -57,6 +57,13 @@ td.p{font-weight:700;color:var(--acc)}
 .fr{display:flex;gap:8px;align-items:center}
 .fr button{margin-left:auto}
 .fe{margin:4px 0 0}
+#onb{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:20px}
+.ob{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:420px;width:100%}
+.ob h3{font-size:22px;margin:12px 0 8px}
+.ob p{margin:0;color:var(--mute);line-height:1.5}
+.dots{display:flex;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.dot.on{background:var(--acc)}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 </style>
 </head>
@@ -140,7 +147,19 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 <div id="matches"></div>
 </section>
 
-<p style="text-align:center"><button class="x" id="logout">Abmelden</button></p>
+<p style="text-align:center"><button class="x" id="help">Anleitung</button><button class="x" id="logout">Abmelden</button></p>
+</div>
+<div id="onb" role="dialog" aria-modal="true" style="display:none">
+<div class="ob">
+<div class="dots" id="onbDots"></div>
+<h3 id="onbT"></h3>
+<p id="onbD"></p>
+<div class="row" style="justify-content:space-between;margin-top:18px">
+<button id="onbBack">Zurück</button>
+<button class="pri" id="onbNext">Weiter</button>
+</div>
+<p style="text-align:center;margin:12px 0 0"><button class="x" id="onbSkip">Überspringen</button></p>
+</div>
 </div>
 <footer>created by XiN@NBeY</footer>
 </main>
@@ -168,7 +187,7 @@ async function hdr(){
   return {apikey:SB_KEY,Authorization:"Bearer "+sess.access,"Content-Type":"application/json"};
 }
 function showLogin(){$("login").style.display="block";$("app").style.display="none";$("mode").textContent=""}
-function showApp(){$("login").style.display="none";$("app").style.display="block"}
+function showApp(){$("login").style.display="none";$("app").style.display="block";maybeOnb()}
 function logout(){sess=null;try{localStorage.removeItem("ttliga:sess")}catch(e){}showLogin()}
 
 const $=id=>document.getElementById(id);
@@ -426,6 +445,33 @@ async function refresh(){
     setStatus(false,"Keine Verbindung zur Datenbank ("+e.message+").")
   }
 }
+const ONB=[
+  {t:"Willkommen 🏓",d:"Hier trägst du mit deinen Kumpels eure Tischtennis-Spiele ein. Die Tabelle rechnet sich von selbst, und alle sehen denselben Stand."},
+  {t:"1. Spieler und Saison",d:"Füge zuerst alle Spieler hinzu. Lege dann mit „Neue Saison“ eine Saison an und wähle Spielmodus (Hinrunde, Hin- und Rückrunde oder frei) und Satzformat (Best of 3, 5 oder 7)."},
+  {t:"2. Spiele eintragen",d:"Bei einer Hinrunde stehen alle Paarungen im Spielplan: Ergebnis eintippen und auf „Eintragen“ tippen. Sonst nutzt du das Formular „Spiel eintragen“. Ein Sieg gibt 2 Punkte."},
+  {t:"3. Tabelle und Ranking",d:"Die Tabelle zeigt die aktuelle Saison. Das Gesamtranking zählt alle Saisons zusammen und krönt den besten Spieler 👑. Falsche Einträge löschst du mit dem ✕ (zweimal tippen)."}
+];
+let onbI=0,onbShown=false;
+function onbRender(){
+  const s=ONB[onbI];
+  $("onbT").textContent=s.t;$("onbD").textContent=s.d;
+  $("onbDots").innerHTML=ONB.map((_,i)=>`<span class="dot${i===onbI?" on":""}"></span>`).join("");
+  $("onbBack").style.visibility=onbI?"visible":"hidden";
+  $("onbNext").textContent=onbI===ONB.length-1?"Los geht’s":"Weiter";
+}
+function openOnb(){onbI=0;onbRender();$("onb").style.display="flex"}
+function closeOnb(){$("onb").style.display="none";try{localStorage.setItem("ttliga:onb","1")}catch(e){}}
+function maybeOnb(){
+  if(onbShown)return;
+  onbShown=true;
+  let seen=false;try{seen=localStorage.getItem("ttliga:onb")==="1"}catch(e){}
+  if(!seen)openOnb();
+}
+$("onbNext").onclick=()=>{if(onbI<ONB.length-1){onbI++;onbRender()}else closeOnb()};
+$("onbBack").onclick=()=>{if(onbI>0){onbI--;onbRender()}};
+$("onbSkip").onclick=closeOnb;
+$("help").onclick=openOnb;
+
 $("loginBtn").onclick=async()=>{
   const pw=$("pw").value;
   const m=$("loginMsg");m.textContent="";

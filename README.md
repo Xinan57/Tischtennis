@@ -18,6 +18,7 @@
 - **Standings:** matches played, wins, losses, sets and points, calculated automatically
 - **Overall ranking:** a team counter across all seasons with the total number of matches, points per player and the best player overall
 - **Shared data:** everyone sees the same state, and the page refreshes every 15 seconds
+- **Onboarding:** a short four-step introduction on the first visit, which can be reopened with the **Anleitung** button at the bottom
 - **Password protection:** without logging in, no data can be read or changed
 - Mobile friendly, with light and dark mode
 
