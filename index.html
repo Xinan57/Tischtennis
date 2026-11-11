@@ -41,6 +41,12 @@ td.p{font-weight:700;color:var(--acc)}
 .rd{font-size:13px;color:var(--mute);font-weight:600;margin:10px 0 2px}
 .rd:first-child{margin-top:0}
 #plan button{padding:6px 12px}
+.fx{padding:10px 0;border-bottom:1px solid var(--line)}
+.fx:last-child{border:0}
+.fn{font-weight:600;margin-bottom:6px}
+.fr{display:flex;gap:8px;align-items:center}
+.fr button{margin-left:auto}
+.fe{margin:4px 0 0}
 footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 </style>
 </head>
@@ -77,6 +83,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 <button id="saveSeason" class="pri">Anlegen</button>
 </div>
 <p class="tag" id="sinfo" style="margin:10px 0 0"></p>
+<button class="x" id="delSeason" style="display:none;padding:6px 0;margin-top:4px">Saison löschen</button>
 </section>
 
 <section>
@@ -89,7 +96,7 @@ footer{text-align:center;color:var(--mute);font-size:12px;padding:8px 0 4px}
 <div id="plan"></div>
 </section>
 
-<section>
+<section id="entrySec">
 <h2>Spiel eintragen</h2>
 <div class="row">
 <select id="a" class="grow"></select>
@@ -203,7 +210,7 @@ function stats(){
   return Object.values(t).sort((x,y)=>y.pt-x.pt||(y.sw-y.sl)-(x.sw-x.sl)||y.sw-x.sw||x.n.localeCompare(y.n,"de"));
 }
 
-let pendP=null;
+let pendP=null,pendS=null;
 // Rundenplan nach dem Kreismethoden-Verfahren: jeder spielt pro Runde höchstens einmal.
 function schedule(players,legs){
   const p=players.slice();
@@ -224,7 +231,7 @@ function schedule(players,legs){
   return out;
 }
 function render(){
-  pendP=null;
+  pendP=null;pendS=null;
   if(!S.seasons.find(s=>s.id===cur)&&S.seasons.length)setCur(S.seasons[S.seasons.length-1].id);
   const ss=$("season");
   ss.innerHTML=S.seasons.length?S.seasons.map(s=>`<option value="${esc(s.id)}">${esc(s.name)}</option>`).join(""):`<option value="">Noch keine Saison</option>`;
@@ -247,22 +254,32 @@ function render(){
     $("sinfo").textContent=mt+sw+(tot?" · "+played+" von "+tot+" Spielen":" · "+played+" Spiele");
   }else $("sinfo").textContent="";
 
+  const ds=$("delSeason");
+  ds.style.display=cs?"inline-block":"none";
+  ds.textContent="Saison löschen";
+  ds.style.color="";
+
   {
     const sec=$("planSec"),box=$("plan");
-    if(cs&&(cs.mode==="single"||cs.mode==="double")&&S.players.length>1){
+    // Nur Hinrunde: Plan mit direkter Eingabe. Sonst nur bei festem Satzformat (Best of 3, 5 oder 7).
+    const inline=!!cs&&cs.mode==="single";
+    if(cs&&(cs.win>0||inline)&&S.players.length>1){
       sec.style.display="block";
-      const legs=cs.mode==="single"?1:2;
+      $("entrySec").style.display=inline?"none":"block";
+      const legs=cs.mode==="double"?2:1;
       const cnt=(a,b)=>S.matches.filter(x=>x.season===cur&&((x.a===a&&x.b===b)||(x.a===b&&x.b===a))).length;
       let html="",shown=0;
       for(const rd of schedule(S.players,legs)){
         const open=rd.pairs.filter(([a,b])=>cnt(a,b)<=rd.leg);
         if(!open.length)continue;
-        if(shown>=2)break;
+        if(!inline&&shown>=2)break;
         shown++;
-        html+=`<div class="rd">Runde ${rd.round}</div>`+open.map(([a,b])=>`<div class="m"><span>${esc(a)} – ${esc(b)}</span><button data-pa="${esc(a)}" data-pb="${esc(b)}">Eintragen</button></div>`).join("");
+        html+=`<div class="rd">Runde ${rd.round}</div>`+open.map(([a,b])=>inline
+          ?`<div class="fx" data-a="${esc(a)}" data-b="${esc(b)}"><div class="fn">${esc(a)} – ${esc(b)}</div><div class="fr"><input type="number" class="s1" min="0" max="30" inputmode="numeric" placeholder="0"><span>:</span><input type="number" class="s2" min="0" max="30" inputmode="numeric" placeholder="0"><button class="pri" data-save="1">Eintragen</button></div><p class="msg fe"></p></div>`
+          :`<div class="m"><span>${esc(a)} – ${esc(b)}</span><button data-pa="${esc(a)}" data-pb="${esc(b)}">Eintragen</button></div>`).join("");
       }
       box.innerHTML=html||`<p class="empty">Alle Spiele dieser Saison sind gespielt. 🎉</p>`;
-    }else sec.style.display="none";
+    }else{sec.style.display="none";$("entrySec").style.display="block"}
   }
 
   $("table").innerHTML=st.length?`<table><tr><th>#</th><th class="n">Name</th><th>Sp</th><th>S</th><th>N</th><th>Sätze</th><th>Pkt</th></tr>`+
@@ -318,12 +335,44 @@ $("add").onclick=()=>{
   mutate(()=>{S.matches.push(match)});
 };
 
+function planSave(a,b,sa,sb,err){
+  err.textContent="";
+  const cs=S.seasons.find(s=>s.id===cur);
+  if(!cs)return;
+  if(isNaN(sa)||isNaN(sb)||sa<0||sb<0){err.textContent="Bitte beide Satzergebnisse eintragen.";return}
+  if(sa===sb){err.textContent="Unentschieden gibt es nicht, ein Spieler muss gewinnen.";return}
+  if(cs.win&&(Math.max(sa,sb)!==cs.win||Math.min(sa,sb)>=cs.win)){err.textContent="Bei Best of "+(cs.win*2-1)+" hat der Sieger genau "+cs.win+" Sätze, der Verlierer weniger.";return}
+  const match={id:uid(),season:cur,a,b,sa,sb,d:new Date().toLocaleDateString("de-DE")};
+  mutate(()=>{
+    const c=S.matches.filter(x=>x.season===cur&&((x.a===a&&x.b===b)||(x.a===b&&x.b===a))).length;
+    if(c<1)S.matches.push(match);
+  });
+}
 $("plan").onclick=e=>{
-  const a=e.target.dataset&&e.target.dataset.pa;
-  if(!a)return;
-  $("a").value=a;$("b").value=e.target.dataset.pb;
+  const t=e.target,d=t.dataset||{};
+  if(d.save){
+    const row=t.closest(".fx");
+    planSave(row.dataset.a,row.dataset.b,parseInt(row.querySelector(".s1").value,10),parseInt(row.querySelector(".s2").value,10),row.querySelector(".fe"));
+    return;
+  }
+  if(!d.pa)return;
+  $("a").value=d.pa;$("b").value=d.pb;
   $("a").scrollIntoView({behavior:"smooth",block:"center"});
   $("sa").focus();
+};
+
+$("delSeason").onclick=e=>{
+  if(!cur)return;
+  const id=cur;
+  if(pendS===id){
+    pendS=null;
+    mutate(()=>{S.seasons=S.seasons.filter(s=>s.id!==id);S.matches=S.matches.filter(m=>m.season!==id)});
+  }else{
+    pendS=id;
+    const c=S.matches.filter(m=>m.season===id).length;
+    e.target.textContent=c?"Mit "+c+" Spielen löschen?":"Löschen?";
+    e.target.style.color="var(--bad)";
+  }
 };
 
 $("players").onclick=e=>{
