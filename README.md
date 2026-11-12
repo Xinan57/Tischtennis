@@ -20,7 +20,9 @@
 - **Shared data:** everyone sees the same state, and the page refreshes every 15 seconds
 - **Onboarding:** a short four-step introduction on the first visit, which can be reopened with the **Anleitung** button at the bottom
 - **Password protection:** without logging in, no data can be read or changed
+- **Home screen app:** when added to the home screen, it shows a table tennis icon (🏓) under the name "Tischtennis" and opens without the browser bar
 - Mobile friendly, with light and dark mode
+- Not indexed by search engines (`noindex`), so the page stays private to your group
 
 > The app interface is in German.
 
@@ -94,6 +96,13 @@ The publishable key is meant to be used in the browser. Never put the **service_
 5. Delete wrong entries with the ✕ (tap twice to confirm).
 
 Deleting a player also removes all of that player's matches, and deleting a season removes all matches of that season. This cannot be undone.
+
+## Add to home screen
+
+- **iPhone:** open the site in Safari, tap **Share**, then **Add to Home Screen**.
+- **Android:** open the site in Chrome and choose **Add to Home screen** in the menu. The 🏓 icon is only guaranteed on iPhone.
+
+If you change the icon later, remove the old home screen shortcut and add it again, because the phone stores the icon when it is added.
 
 ## Notes
 
